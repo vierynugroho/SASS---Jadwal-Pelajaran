@@ -27,3 +27,6 @@ export function normalizeDays(days: Partial<DayConfig>[] | undefined | null): Da
       : d;
   });
 }
+
+/** Email superadmin untuk kontak di luar aplikasi. Bisa diganti lewat env NEXT_PUBLIC_SUPPORT_EMAIL. */
+export const SUPPORT_EMAIL = process.env.NEXT_PUBLIC_SUPPORT_EMAIL || "viery15102002@gmail.com";

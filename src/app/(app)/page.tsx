@@ -5,6 +5,7 @@ import { useMemo } from "react";
 import { useAllData } from "@/lib/useAllData";
 import { findConflicts, itemsOf, teacherLoad } from "@/lib/schedule";
 import { Card, Loading, PageHeader } from "@/components/ui";
+import { Icon } from "@/components/icons";
 
 export default function Dashboard() {
   const d = useAllData();
@@ -49,7 +50,7 @@ export default function Dashboard() {
           <ol className="space-y-2 text-sm">
             {steps.map((s, i) => (
               <li key={s.href} className="flex items-center gap-2">
-                <span className={`flex h-5 w-5 items-center justify-center rounded-full text-xs ${s.done ? "bg-green-600 text-white" : "bg-slate-200 text-slate-600"}`}>{s.done ? "✓" : i + 1}</span>
+                <span className={`flex h-5 w-5 items-center justify-center rounded-full text-xs ${s.done ? "bg-green-600 text-white" : "bg-slate-200 text-slate-600"}`}>{s.done ? <Icon name="check" size={12} /> : i + 1}</span>
                 <Link href={s.href} className={s.done ? "text-slate-400 line-through" : "text-blue-700 hover:underline"}>{s.label}</Link>
               </li>
             ))}

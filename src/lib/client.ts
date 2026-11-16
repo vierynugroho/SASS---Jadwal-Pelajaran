@@ -20,13 +20,14 @@ export async function api<T = unknown>(path: string, init?: { method?: string; b
   return data as T;
 }
 
-/** Ambil data dari API, dengan fungsi reload. */
+/** Ambil data dari API, dengan fungsi reload. Path kosong = belum fetch. */
 export function useApi<T>(path: string) {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [version, setVersion] = useState(0);
 
   useEffect(() => {
+    if (!path) return;
     let alive = true;
     api<T>(path)
       .then((d) => alive && (setData(d), setError(null)))

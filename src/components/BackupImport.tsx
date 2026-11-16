@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { api, toast } from "@/lib/client";
 import { Button } from "./ui";
+import { Icon } from "./icons";
 
 /** Tombol pilih file backup lalu import ke endpoint tertentu (dengan konfirmasi). */
 export function ImportButton({
@@ -11,7 +12,7 @@ export function ImportButton({
   onDone,
   size = "md",
   className,
-  label = "⬆ Pilih file backup",
+  label = "Pilih file backup",
 }: {
   endpoint: string;
   schoolName: string;
@@ -62,7 +63,7 @@ export function ImportButton({
         }}
       />
       <Button size={size} variant={size === "sm" ? "ghost" : "secondary"} className={className} disabled={busy} onClick={() => fileRef.current?.click()}>
-        {busy ? "Mengimpor…" : label}
+        <Icon name="upload" />{busy ? "Mengimpor…" : label}
       </Button>
     </>
   );

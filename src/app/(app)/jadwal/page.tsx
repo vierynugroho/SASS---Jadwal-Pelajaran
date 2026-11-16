@@ -7,7 +7,8 @@ import { useAllData } from "@/lib/useAllData";
 import { computeDay, conflictKey, findConflicts, fmt, fmtRange, itemsOf, toMin, validateDay } from "@/lib/schedule";
 import { LIMITS, MAX_ITEMS_PER_DAY } from "@/lib/limits";
 import type { DayConfig, Schedule, ScheduleItem, Subject, Teacher } from "@/lib/types";
-import { Button, Card, Empty, Input, Loading, PageHeader, Select } from "@/components/ui";
+import { Button, Card, Combo, Empty, Input, Loading, PageHeader, Select, type ComboOption } from "@/components/ui";
+import { Icon } from "@/components/icons";
 
 type Draft = Record<string, ScheduleItem[]>;
 
@@ -99,13 +100,13 @@ export default function JadwalPage() {
   const totalErrors = Object.values(validation).reduce((a, v) => a + v.count, 0);
 
   return (
-    <div className="pb-20">
+    <div className="pb-28 sm:pb-20">
       <PageHeader
         title="Susun Jadwal"
         description="Jam mulai & selesai dihitung otomatis dari urutan dan durasi tiap item."
         actions={
           <>
-            <Select className="w-auto" value="" onChange={(e) => e.target.value && copyFromClass(e.target.value)}>
+            <Select className="w-full sm:w-auto" value="" onChange={(e) => e.target.value && copyFromClass(e.target.value)}>
               <option value="">Salin dari kelas…</option>
               {d.classes.filter((c) => c._id !== currentClassId).map((c) => (
                 <option key={c._id} value={c._id}>
@@ -146,25 +147,26 @@ export default function JadwalPage() {
               conflicts={(u) => conflicts.get(conflictKey(currentClassId, day.day, u))}
               validation={validation[day.day]}
               data={d}
+              classId={currentClassId}
             />
           ))}
         </div>
       )}
 
       <div className="fixed inset-x-0 bottom-0 z-10 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur md:left-60 print:hidden">
-        <div className="flex items-center justify-between gap-3">
-          <div className="text-sm">
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+          <div className="min-w-0 text-sm">
             <span className="font-medium">{d.classMap.get(currentClassId)?.name}</span>
             {dirty ? <span className="ml-2 text-amber-600">• Belum disimpan</span> : <span className="ml-2 text-slate-400">• Tersimpan</span>}
             {totalConflicts > 0 && <span className="ml-2 text-red-600">• {totalConflicts} bentrok</span>}
             {totalErrors > 0 && <span className="ml-2 font-medium text-red-600">• {totalErrors} isian tidak valid</span>}
           </div>
-          <div className="flex gap-2">
+          <div className="ml-auto flex gap-2">
             <Button variant="secondary" disabled={!dirty || saving} onClick={() => setEdited(null)}>
               Batalkan
             </Button>
             <Button disabled={!dirty || saving || totalErrors > 0} onClick={save} title={totalErrors ? "Perbaiki isian yang ditandai merah" : undefined}>
-              {saving ? "Menyimpan…" : "Simpan Jadwal"}
+              <Icon name="save" />{saving ? "Menyimpan…" : "Simpan Jadwal"}
             </Button>
           </div>
         </div>
@@ -184,6 +186,7 @@ function DayColumn({
   conflicts,
   validation,
   data,
+  classId,
 }: {
   day: DayConfig;
   items: ScheduleItem[];
@@ -193,8 +196,27 @@ function DayColumn({
   conflicts: (uid: string) => string[] | undefined;
   validation: ReturnType<typeof validateDay>;
   data: ReturnType<typeof useAllData>;
+  classId: string;
 }) {
   const timed = computeDay(items, day, data.settings, data.subjectMap);
+  // Pelajaran kelas lain di hari ini, untuk mendeteksi guru yang sudah mengajar di jam yang sama.
+  const otherLessons = useMemo(
+    () =>
+      data.schedules
+        .filter((s) => s.classId !== classId)
+        .flatMap((s) =>
+          computeDay(itemsOf(s, day.day), day, data.settings, data.subjectMap)
+            .filter((it) => it.type === "lesson" && it.teacherId)
+            .map((it) => ({ ...it, classId: s.classId })),
+        ),
+    [data.schedules, data.settings, data.subjectMap, classId, day],
+  );
+  /** Alasan bentrok guru pada rentang waktu [start, end), atau null jika bebas. */
+  const busyReason = (teacherId: string, start: number, end: number) => {
+    const hit = otherLessons.filter((o) => o.teacherId === teacherId && o.start < end && start < o.end);
+    if (!hit.length) return null;
+    return "Bentrok: " + hit.map((o) => `${data.classMap.get(o.classId)?.name ?? "?"} ${fmtRange(o.start, o.end)} (${data.subjectMap.get(o.subjectId ?? "")?.name ?? "?"})`).join("; ");
+  };
   const end = timed.length ? timed[timed.length - 1].end : null;
   const totalJp = items.filter((i) => i.type === "lesson").reduce((a, i) => a + (Number(i.jp) || 1), 0);
 
@@ -215,33 +237,36 @@ function DayColumn({
     ]);
 
   return (
-    <Card className="flex flex-col">
-      <div className="flex items-center justify-between border-b border-slate-200 px-4 py-2.5">
-        <div>
-          <div className="font-semibold">{day.day}</div>
-          <div className="text-xs text-slate-500">
-            Mulai {fmt(toMin(day.startTime))} · {day.lessonDuration} mnt/JP
-            {end !== null && <> · selesai {fmt(end)} · {totalJp} JP</>}
-          </div>
+    <Card className="flex flex-col overflow-hidden">
+      <div className="bg-blue-600 px-4 py-3 text-white">
+        <div className="flex items-center gap-2">
+          <span className="text-base font-semibold">{day.day}</span>
+          {end !== null && <span className="rounded-full bg-white/20 px-2 py-0.5 text-[11px] font-semibold">{totalJp} JP</span>}
+          {otherDays.length > 0 && (
+            <div className="ml-auto w-32 shrink-0">
+              <Select
+                className="border-transparent py-1 text-xs text-slate-700"
+                value=""
+                onChange={(e) => {
+                  if (e.target.value && (!items.length || confirm(`Ganti jadwal ${day.day} dengan salinan dari ${e.target.value}?`))) onCopyFrom(e.target.value);
+                }}
+              >
+                <option value="">Salin dari…</option>
+                {otherDays.map((x) => (
+                  <option key={x}>{x}</option>
+                ))}
+              </Select>
+            </div>
+          )}
         </div>
-        {otherDays.length > 0 && (
-          <Select
-            className="w-auto py-1 text-xs"
-            value=""
-            onChange={(e) => {
-              if (e.target.value && (!items.length || confirm(`Ganti jadwal ${day.day} dengan salinan dari ${e.target.value}?`))) onCopyFrom(e.target.value);
-            }}
-          >
-            <option value="">Salin dari…</option>
-            {otherDays.map((x) => (
-              <option key={x}>{x}</option>
-            ))}
-          </Select>
-        )}
+        <div className="mt-0.5 text-xs text-blue-100">
+          Mulai {fmt(toMin(day.startTime))} · {day.lessonDuration} mnt/JP
+          {end !== null && <> · selesai {fmt(end)}</>}
+        </div>
       </div>
 
       {validation.dayErrors.map((m) => (
-        <p key={m} className="border-b border-red-200 bg-red-50 px-4 py-1.5 text-xs font-medium text-red-700">⚠ {m}</p>
+        <p key={m} className="border-b border-red-200 bg-red-50 px-4 py-1.5 text-xs font-medium text-red-700"><Icon name="alert" size={12} className="mr-1 inline -mt-0.5" />{m}</p>
       ))}
       <div className="flex-1 divide-y divide-slate-100">
         {timed.length === 0 && <p className="px-4 py-6 text-center text-sm text-slate-400">Belum ada jadwal.</p>}
@@ -251,22 +276,22 @@ function DayColumn({
           return (
             <div key={it.uid} className={`px-3 py-2.5 ${it.type !== "lesson" ? "bg-amber-50/60" : ""} ${errs || invalid ? "bg-red-50" : ""}`}>
               <div className="mb-1.5 flex items-center justify-between text-xs">
-                <span className="font-mono font-medium text-slate-700">
+                <span className="font-mono font-semibold text-blue-700">
                   {fmtRange(it.start, it.end)}
                   <span className="ml-2 font-sans font-normal text-slate-400">
                     {it.type === "lesson" ? `JP ${it.jpFrom === it.jpTo ? it.jpFrom : `${it.jpFrom}–${it.jpTo}`}` : TYPE_LABEL[it.type]} · {it.minutes} mnt
                   </span>
                 </span>
                 <span className="flex">
-                  <IconBtn onClick={() => move(i, -1)} disabled={i === 0} title="Naik">↑</IconBtn>
-                  <IconBtn onClick={() => move(i, 1)} disabled={i === items.length - 1} title="Turun">↓</IconBtn>
-                  <IconBtn onClick={() => onChange([...items.slice(0, i + 1), { ...items[i], uid: uid() }, ...items.slice(i + 1)])} disabled={items.length >= MAX_ITEMS_PER_DAY} title="Duplikat">⧉</IconBtn>
-                  <IconBtn onClick={() => onChange(items.filter((_, j) => j !== i))} title="Hapus" className="text-red-500">✕</IconBtn>
+                  <IconBtn onClick={() => move(i, -1)} disabled={i === 0} title="Naik"><Icon name="up" size={14} /></IconBtn>
+                  <IconBtn onClick={() => move(i, 1)} disabled={i === items.length - 1} title="Turun"><Icon name="down" size={14} /></IconBtn>
+                  <IconBtn onClick={() => onChange([...items.slice(0, i + 1), { ...items[i], uid: uid() }, ...items.slice(i + 1)])} disabled={items.length >= MAX_ITEMS_PER_DAY} title="Duplikat"><Icon name="copy" size={13} /></IconBtn>
+                  <IconBtn onClick={() => onChange(items.filter((_, j) => j !== i))} title="Hapus" className="text-red-500"><Icon name="x" size={14} /></IconBtn>
                 </span>
               </div>
 
               {it.type === "lesson" ? (
-                <LessonFields item={it} onChange={(p) => set(i, p)} subjects={data.subjects} teachers={data.teachers} />
+                <LessonFields item={it} onChange={(p) => set(i, p)} subjects={data.subjects} teachers={data.teachers} busy={(t) => busyReason(t, it.start, it.end)} />
               ) : (
                 <div className="flex gap-2">
                   <Input className="py-1" value={it.label ?? ""} placeholder={TYPE_LABEL[it.type]} onChange={(e) => set(i, { label: e.target.value })} />
@@ -274,7 +299,7 @@ function DayColumn({
                 </div>
               )}
               {[...(invalid ?? []), ...(errs ?? [])].map((m) => (
-                <p key={m} className="mt-1 text-xs font-medium text-red-600">⚠ {m}</p>
+                <p key={m} className="mt-1 flex items-start gap-1 text-xs font-medium text-red-600"><Icon name="alert" size={12} className="mt-0.5 shrink-0" />{m}</p>
               ))}
             </div>
           );
@@ -282,39 +307,51 @@ function DayColumn({
       </div>
 
       <div className="flex gap-1.5 border-t border-slate-200 p-2.5">
-        <Button size="sm" disabled={items.length >= MAX_ITEMS_PER_DAY} onClick={() => add("lesson")}>+ Pelajaran</Button>
-        <Button size="sm" variant="secondary" disabled={items.length >= MAX_ITEMS_PER_DAY} onClick={() => add("break")}>+ Istirahat</Button>
-        <Button size="sm" variant="secondary" disabled={items.length >= MAX_ITEMS_PER_DAY} onClick={() => add("activity")}>+ Kegiatan</Button>
+        <Button size="sm" disabled={items.length >= MAX_ITEMS_PER_DAY} onClick={() => add("lesson")}><Icon name="plus" size={12} />Pelajaran</Button>
+        <Button size="sm" variant="secondary" disabled={items.length >= MAX_ITEMS_PER_DAY} onClick={() => add("break")}><Icon name="plus" size={12} />Istirahat</Button>
+        <Button size="sm" variant="secondary" disabled={items.length >= MAX_ITEMS_PER_DAY} onClick={() => add("activity")}><Icon name="plus" size={12} />Kegiatan</Button>
       </div>
     </Card>
   );
 }
 
-function LessonFields({ item, onChange, subjects, teachers }: { item: ScheduleItem; onChange: (p: Partial<ScheduleItem>) => void; subjects: Subject[]; teachers: Teacher[] }) {
+function LessonFields({
+  item,
+  onChange,
+  subjects,
+  teachers,
+  busy,
+}: {
+  item: ScheduleItem;
+  onChange: (p: Partial<ScheduleItem>) => void;
+  subjects: Subject[];
+  teachers: Teacher[];
+  busy: (teacherId: string) => string | null;
+}) {
   const qualified = item.subjectId ? teachers.filter((t) => t.subjectIds.includes(item.subjectId!)) : [];
   const others = teachers.filter((t) => !qualified.includes(t));
-  const subject = subjects.find((s) => s._id === item.subjectId);
 
   function pickSubject(subjectId: string | null) {
-    const q = subjectId ? teachers.filter((t) => t.subjectIds.includes(subjectId)) : [];
-    const keepTeacher = item.teacherId && q.some((t) => t._id === item.teacherId);
+    const q = subjectId ? teachers.filter((t) => t.subjectIds.includes(subjectId) && !busy(t._id)) : [];
+    const keepTeacher = item.teacherId && teachers.find((t) => t._id === item.teacherId)?.subjectIds.includes(subjectId ?? "");
     onChange({ subjectId, teacherId: keepTeacher ? item.teacherId : q.length === 1 ? q[0]._id : item.teacherId });
   }
+
+  const subjectOpts: ComboOption[] = subjects.map((s) => ({ value: s._id, label: s.name, color: s.color, note: s.code || undefined }));
+  const teacherOpt = (t: Teacher, group: string): ComboOption => {
+    const reason = busy(t._id);
+    // Guru yang sedang terpilih tetap bisa dipilih ulang; bentroknya ditampilkan sebagai peringatan.
+    return { value: t._id, label: t.name, group, note: reason ?? undefined, disabled: !!reason && t._id !== item.teacherId };
+  };
+  const teacherOpts = [
+    ...qualified.map((t) => teacherOpt(t, "Pengampu mapel ini")),
+    ...others.map((t) => teacherOpt(t, qualified.length ? "Guru lain" : "Semua guru")),
+  ];
 
   return (
     <div className="space-y-1.5">
       <div className="flex gap-2">
-        <Select
-          className={`py-1 ${!item.subjectId ? "border-amber-400" : ""}`}
-          style={subject ? { borderLeft: `4px solid ${subject.color}` } : undefined}
-          value={item.subjectId ?? ""}
-          onChange={(e) => pickSubject(e.target.value || null)}
-        >
-          <option value="">— Pilih mapel —</option>
-          {subjects.map((s) => (
-            <option key={s._id} value={s._id}>{s.name}</option>
-          ))}
-        </Select>
+        <Combo value={item.subjectId} options={subjectOpts} onChange={pickSubject} placeholder="— Pilih mapel —" invalid={!item.subjectId} className="py-1" />
         <label className="flex shrink-0 items-center gap-1 text-xs text-slate-500" title="Jumlah jam pelajaran">
           <Input
             type="number"
@@ -329,17 +366,7 @@ function LessonFields({ item, onChange, subjects, teachers }: { item: ScheduleIt
         </label>
       </div>
       <div className="flex gap-2">
-        <Select className="py-1" value={item.teacherId ?? ""} onChange={(e) => onChange({ teacherId: e.target.value || null })}>
-          <option value="">— Pilih guru —</option>
-          {qualified.length > 0 && (
-            <optgroup label="Pengampu mapel ini">
-              {qualified.map((t) => <option key={t._id} value={t._id}>{t.name}</option>)}
-            </optgroup>
-          )}
-          <optgroup label={qualified.length ? "Guru lain" : "Semua guru"}>
-            {others.map((t) => <option key={t._id} value={t._id}>{t.name}</option>)}
-          </optgroup>
-        </Select>
+        <Combo value={item.teacherId} options={teacherOpts} onChange={(v) => onChange({ teacherId: v })} placeholder="— Pilih guru —" emptyLabel="— Tanpa guru —" className="py-1" />
         <DurationInput value={item.duration} placeholder="auto" onChange={(v) => onChange({ duration: v })} title="Override durasi total (menit). Kosongkan untuk otomatis." />
       </div>
     </div>
@@ -365,6 +392,6 @@ function DurationInput({ value, onChange, placeholder, title }: { value?: number
 }
 
 function IconBtn({ className, ...p }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
-  return <button {...p} className={`h-6 w-6 rounded text-slate-500 hover:bg-slate-200 disabled:opacity-30 ${className ?? ""}`} />;
+  return <button {...p} className={`inline-flex h-6 w-6 items-center justify-center rounded text-slate-500 hover:bg-slate-200 disabled:opacity-30 ${className ?? ""}`} />;
 }
 

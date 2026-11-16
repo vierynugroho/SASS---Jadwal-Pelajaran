@@ -1,5 +1,5 @@
 import { HttpError, assertId, json, readBody, route, str } from "@/lib/api";
-import { ClassRoom, Invite, School, Schedule, Subject, Teacher, User } from "@/lib/models";
+import { ClassRoom, Duty, Invite, Ticket, School, Schedule, Subject, Teacher, User } from "@/lib/models";
 import { toSettings } from "@/lib/settings";
 
 export const PUT = route<{ id: string }>(
@@ -33,6 +33,8 @@ export const DELETE = route<{ id: string }>(
       Subject.deleteMany({ schoolId: id }),
       ClassRoom.deleteMany({ schoolId: id }),
       Schedule.deleteMany({ schoolId: id }),
+      Duty.deleteMany({ schoolId: id }),
+      Ticket.deleteMany({ schoolId: id }),
       Invite.deleteMany({ schoolId: id }),
     ]);
     await School.deleteOne({ _id: id });

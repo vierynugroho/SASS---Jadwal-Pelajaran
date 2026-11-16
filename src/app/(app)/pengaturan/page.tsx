@@ -72,6 +72,22 @@ function SettingsForm({ initial }: { initial: Settings }) {
         </Card>
 
         <Card className="p-5">
+          <h2 className="mb-1 font-semibold">Penanda tangan tambahan</h2>
+          <p className="mb-4 text-sm text-slate-500">Opsional, mis. Wakil Kepala Kurikulum. Bisa diaktifkan & diubah lagi saat mencetak.</p>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Field label="Jabatan">
+              <Input value={form.signer2Title ?? ""} onChange={(e) => set({ signer2Title: e.target.value })} placeholder="Wakil Kepala Kurikulum" />
+            </Field>
+            <Field label="Nama">
+              <Input value={form.signer2Name ?? ""} onChange={(e) => set({ signer2Name: e.target.value })} />
+            </Field>
+            <Field label="NIP">
+              <Input value={form.signer2Nip ?? ""} onChange={(e) => set({ signer2Nip: e.target.value })} />
+            </Field>
+          </div>
+        </Card>
+
+        <Card className="p-5">
           <h2 className="mb-1 font-semibold">Hari & jam pelajaran</h2>
           <p className="mb-4 text-sm text-slate-500">Jam mulai dan durasi 1 JP bisa berbeda per hari (mis. Jumat lebih singkat). Mapel bisa punya durasi sendiri di menu Mata Pelajaran.</p>
           <div className="overflow-x-auto">

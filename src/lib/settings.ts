@@ -14,6 +14,9 @@ export function toSettings(s: Partial<SchoolDoc>): Settings {
     semester: s.semester ?? "",
     principalName: s.principalName ?? "",
     principalNip: s.principalNip ?? "",
+    signer2Title: s.signer2Title ?? "",
+    signer2Name: s.signer2Name ?? "",
+    signer2Nip: s.signer2Nip ?? "",
     breakDuration: s.breakDuration ?? 15,
     days: normalizeDays(s.days),
   };
@@ -49,6 +52,9 @@ export function cleanSettings(b: Partial<Settings>) {
     semester: s(b.semester),
     principalName: s(b.principalName),
     principalNip: s(b.principalNip),
+    signer2Title: s(b.signer2Title),
+    signer2Name: s(b.signer2Name),
+    signer2Nip: s(b.signer2Nip),
     breakDuration: Number(b.breakDuration),
     days: normalizeDays(b.days),
   };

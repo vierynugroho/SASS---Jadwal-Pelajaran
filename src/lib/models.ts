@@ -20,6 +20,9 @@ export interface SchoolDoc {
   semester: string;
   principalName: string;
   principalNip: string;
+  signer2Title: string;
+  signer2Name: string;
+  signer2Nip: string;
   breakDuration: number;
   days: DayConfig[];
   active: boolean;
@@ -38,6 +41,20 @@ export interface TeacherDoc { schoolId: Id; name: string; code: string; nip: str
 export interface SubjectDoc { schoolId: Id; name: string; code: string; color: string; duration: number | null }
 export interface ClassDoc { schoolId: Id; name: string; grade: string; homeroomTeacherId: Id | null }
 export interface ItemDoc { uid: string; type: ItemType; subjectId: Id | null; teacherId: Id | null; jp: number; duration: number | null; label: string }
+export interface DutyEntryDoc { day: string; classId: Id | null; teacherIds: Id[] }
+export interface DutyDoc { schoolId: Id; entries: DutyEntryDoc[] }
+export interface TicketMessageDoc { authorId: Id; authorName: string; authorRole: Role; body: string; createdAt: Date }
+export interface TicketDoc {
+  schoolId: Id;
+  createdBy: Id;
+  subject: string;
+  status: "open" | "closed";
+  messages: TicketMessageDoc[];
+  /** Sudah dibaca oleh sisi admin sekolah / superadmin. */
+  readByAdmin: boolean;
+  readBySuper: boolean;
+  lastMessageAt: Date;
+}
 export interface ScheduleDoc { schoolId: Id; classId: Id; days: { day: string; items: ItemDoc[] }[] }
 
 const opts = { timestamps: true, versionKey: false } as const;
@@ -74,6 +91,9 @@ const SchoolSchema = new Schema<SchoolDoc>(
     semester: { type: String, default: "" },
     principalName: { type: String, default: "" },
     principalNip: { type: String, default: "" },
+    signer2Title: { type: String, default: "" },
+    signer2Name: { type: String, default: "" },
+    signer2Nip: { type: String, default: "" },
     breakDuration: { type: Number, default: 15 },
     days: { type: [DaySchema], default: [] },
     active: { type: Boolean, default: true },
@@ -150,6 +170,48 @@ const ScheduleSchema = new Schema<ScheduleDoc>(
   opts,
 );
 
+const DutySchema = new Schema<DutyDoc>(
+  {
+    schoolId: { type: ObjectId, ref: "School", required: true, unique: true },
+    entries: [
+      new Schema<DutyEntryDoc>(
+        {
+          day: { type: String, required: true },
+          classId: { type: ObjectId, ref: "ClassRoom", default: null },
+          teacherIds: [{ type: ObjectId, ref: "Teacher" }],
+        },
+        { _id: false },
+      ),
+    ],
+  },
+  opts,
+);
+
+const TicketSchema = new Schema<TicketDoc>(
+  {
+    schoolId: schoolRef,
+    createdBy: { type: ObjectId, ref: "User", required: true },
+    subject: { type: String, required: true, trim: true, maxlength: 150 },
+    status: { type: String, enum: ["open", "closed"], default: "open", index: true },
+    messages: [
+      new Schema<TicketMessageDoc>(
+        {
+          authorId: { type: ObjectId, ref: "User", required: true },
+          authorName: { type: String, default: "" },
+          authorRole: { type: String, enum: ["superadmin", "admin"], required: true },
+          body: { type: String, required: true, maxlength: 5000 },
+          createdAt: { type: Date, default: () => new Date() },
+        },
+        { _id: false },
+      ),
+    ],
+    readByAdmin: { type: Boolean, default: true },
+    readBySuper: { type: Boolean, default: false },
+    lastMessageAt: { type: Date, default: () => new Date(), index: true },
+  },
+  opts,
+);
+
 export const User = getModel<UserDoc>("User", UserSchema, "users");
 export const School = getModel<SchoolDoc>("School", SchoolSchema, "schools");
 export const Invite = getModel<InviteDoc>("Invite", InviteSchema, "invites");
@@ -157,3 +219,5 @@ export const Teacher = getModel<TeacherDoc>("Teacher", TeacherSchema, "teachers"
 export const Subject = getModel<SubjectDoc>("Subject", SubjectSchema, "subjects");
 export const ClassRoom = getModel<ClassDoc>("ClassRoom", ClassSchema, "classes");
 export const Schedule = getModel<ScheduleDoc>("Schedule", ScheduleSchema, "schedules");
+export const Duty = getModel<DutyDoc>("Duty", DutySchema, "duties");
+export const Ticket = getModel<TicketDoc>("Ticket", TicketSchema, "tickets");

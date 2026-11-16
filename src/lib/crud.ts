@@ -1,7 +1,7 @@
 import type { Model } from "mongoose";
 import mongoose from "mongoose";
 import { HttpError, assertId, json, readBody, route, str } from "./api";
-import { ClassRoom, Schedule, Subject, Teacher } from "./models";
+import { ClassRoom, Duty, Schedule, Subject, Teacher } from "./models";
 import { LIMITS, intError } from "./limits";
 
 type Clean = (body: Record<string, unknown>, schoolId: string) => Promise<Record<string, unknown>>;
@@ -71,6 +71,7 @@ export const teachersCrud = crud(
     if (await Schedule.exists({ schoolId, "days.items.teacherId": id }))
       throw new HttpError(409, "Guru masih dipakai di jadwal. Hapus dari jadwal terlebih dahulu.");
     await ClassRoom.updateMany({ schoolId, homeroomTeacherId: id }, { homeroomTeacherId: null });
+    await Duty.updateOne({ schoolId }, { $pull: { "entries.$[].teacherIds": id } });
   },
 );
 
@@ -103,5 +104,6 @@ export const classesCrud = crud(
   { grade: 1, name: 1 },
   async (id, schoolId) => {
     await Schedule.deleteOne({ schoolId, classId: id });
+    await Duty.updateOne({ schoolId }, { $pull: { entries: { classId: id } } });
   },
 );

@@ -1,27 +1,29 @@
 import { NextResponse } from "next/server";
 import mongoose from "mongoose";
 import { HttpError } from "@/lib/api";
-import { ClassRoom, School, Schedule, Subject, Teacher } from "@/lib/models";
+import { ClassRoom, Duty, School, Schedule, Subject, Teacher } from "@/lib/models";
+import { getDuties, sanitizeDuties } from "@/lib/duty";
 import { cleanSettings, getSettings } from "@/lib/settings";
 import { sanitizeDays } from "@/lib/sanitize";
 import { LIMITS, intError } from "@/lib/limits";
 import type { Settings } from "@/lib/types";
 
 const APP = "jadwal-mengajar";
-const VERSION = 2;
+const VERSION = 3;
 
 /** Export data satu sekolah sebagai file JSON (response download). */
 export async function exportSchool(schoolId: string) {
   const q = { schoolId };
   const strip = { schoolId: 0 };
-  const [settings, teachers, subjects, classes, schedules] = await Promise.all([
+  const [settings, teachers, subjects, classes, schedules, duties] = await Promise.all([
     getSettings(schoolId),
     Teacher.find(q, strip).lean(),
     Subject.find(q, strip).lean(),
     ClassRoom.find(q, strip).lean(),
     Schedule.find(q, strip).lean(),
+    getDuties(schoolId),
   ]);
-  const payload = { app: APP, version: VERSION, exportedAt: new Date().toISOString(), settings, data: { teachers, subjects, classes, schedules } };
+  const payload = { app: APP, version: VERSION, exportedAt: new Date().toISOString(), settings, data: { teachers, subjects, classes, schedules, duties } };
   const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "");
   const slug = settings.schoolName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "sekolah";
   return new NextResponse(JSON.stringify(payload, null, 2), {
@@ -78,6 +80,14 @@ export async function importSchool(schoolId: string, body: { app?: string; setti
       return { classId: ref(s.classId), schoolId, days };
     });
 
+  // Piket opsional: backup versi lama belum punya bagian ini.
+  const dutiesRaw = Array.isArray(body.data.duties) ? (body.data.duties as Raw[]) : [];
+  const duties = sanitizeDuties(
+    dutiesRaw
+      .filter((e) => !e.classId || ref(e.classId))
+      .map((e) => ({ day: e.day, classId: ref(e.classId), teacherIds: ((e.teacherIds as unknown[]) ?? []).map(ref).filter(Boolean) })),
+  );
+
   const sets = [
     [Subject, subjects],
     [Teacher, teachers],
@@ -90,8 +100,10 @@ export async function importSchool(schoolId: string, body: { app?: string; setti
 
   for (const [M] of sets) await (M as typeof Teacher).deleteMany({ schoolId });
   for (const [M, docs] of sets) if (docs.length) await (M as typeof Teacher).insertMany(docs);
+  await Duty.deleteMany({ schoolId });
+  if (duties.length) await Duty.create({ schoolId, entries: duties });
   // Nama sekolah tidak ditimpa; pengaturan lain ikut dipulihkan.
   if (settingsUpdate) await School.updateOne({ _id: schoolId }, settingsUpdate);
 
-  return { ok: true, counts: { teachers: teachers.length, subjects: subjects.length, classes: classes.length, schedules: schedules.length } };
+  return { ok: true, counts: { teachers: teachers.length, subjects: subjects.length, classes: classes.length, schedules: schedules.length, duties: duties.length } };
 }

@@ -39,8 +39,19 @@ export interface Settings {
   semester?: string;
   principalName?: string;
   principalNip?: string;
+  /** Penanda tangan tambahan (opsional), mis. Wakil Kepala Kurikulum. */
+  signer2Title?: string;
+  signer2Name?: string;
+  signer2Nip?: string;
   breakDuration: number;
   days: DayConfig[];
+}
+
+/** Penugasan guru piket. classId null = piket umum (semua kelas). */
+export interface DutyEntry {
+  day: string;
+  classId: string | null;
+  teacherIds: string[];
 }
 
 export interface Teacher {
@@ -115,4 +126,32 @@ export interface InviteInfo {
   usedBy: string | null;
   createdAt: string;
   expired: boolean;
+}
+
+export type TicketStatus = "open" | "closed";
+
+export interface TicketMessage {
+  authorId: string;
+  authorName: string;
+  authorRole: Role;
+  body: string;
+  createdAt: string;
+}
+
+export interface TicketSummary {
+  _id: string;
+  schoolId: string;
+  schoolName?: string;
+  subject: string;
+  status: TicketStatus;
+  lastMessageAt: string;
+  createdAt: string;
+  messageCount: number;
+  preview: string;
+  /** Belum dibaca oleh user yang sedang login. */
+  unread: boolean;
+}
+
+export interface TicketDetail extends Omit<TicketSummary, "preview" | "messageCount"> {
+  messages: TicketMessage[];
 }
